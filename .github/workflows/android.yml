@@ -32,14 +32,21 @@ jobs:
       - name: Compute version
         id: ver
         run: |
-          # On a tag v1.2 -> versionName=1.2, versionCode from run number.
+          # On a tag v1.2 -> versionName=1.2.
+          # On main push -> dev build with a high versionCode so in-app self-update
+          #   always treats the rolling 'latest' build as newer than any installed copy.
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
             VNAME="${GITHUB_REF#refs/tags/v}"
+            # Strip non-numeric dots -> integer, e.g. v1.2 -> 12; fallback to run number.
+            VCODE_NUM="${VNAME//./}"
+            [[ "$VCODE_NUM" =~ ^[0-9]+$ ]] || VCODE_NUM="$GITHUB_RUN_NUMBER"
+            VCODE="$VCODE_NUM"
           else
-            VNAME="0.0-dev"
+            VNAME="dev-${GITHUB_SHA::7}"
+            # Base 900000 + run number keeps dev builds above any released 1.x/2.x
+            # while staying below the 32-bit int ceiling (max ~2147483647).
+            VCODE="$((900000 + GITHUB_RUN_NUMBER))"
           fi
-          # versionCode: monotonic integer = GitHub run number (guaranteed increasing).
-          VCODE="${GITHUB_RUN_NUMBER}"
           echo "version_name=$VNAME" >> "$GITHUB_OUTPUT"
           echo "version_code=$VCODE" >> "$GITHUB_OUTPUT"
           echo "Resolved versionName=$VNAME versionCode=$VCODE"
