@@ -14,8 +14,9 @@ android {
         applicationId = "ru.app.rustoreupdater"
         minSdk = 24
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0"
+        // Overridable from CI via -PversionCode / -PversionName gradle properties.
+        versionCode = (project.findProperty("versionCode") as? String)?.toIntOrNull() ?: 2
+        versionName = (project.findProperty("versionName") as? String) ?: "1.1"
         vectorDrawables { useSupportLibrary = true }
     }
 

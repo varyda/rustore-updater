@@ -32,6 +32,7 @@ class SettingsStore(private val context: Context) {
     private object Keys {
         val INTERVAL_HOURS = longPreferencesKey("interval_hours")
         val AUTO_DOWNLOAD = booleanPreferencesKey("auto_download")
+        val CHECK_SELF_UPDATES = booleanPreferencesKey("check_self_updates")
     }
 
     val intervalHours: Flow<Int> = context.dataStore.data.map { p ->
@@ -42,11 +43,20 @@ class SettingsStore(private val context: Context) {
         p[Keys.AUTO_DOWNLOAD] ?: false
     }
 
+    /** Whether the app should check GitHub for new versions of itself. Default: on. */
+    val checkSelfUpdates: Flow<Boolean> = context.dataStore.data.map { p ->
+        p[Keys.CHECK_SELF_UPDATES] ?: true
+    }
+
     suspend fun setInterval(hours: Int) {
         context.dataStore.edit { it[Keys.INTERVAL_HOURS] = hours.toLong() }
     }
 
     suspend fun setAutoDownload(value: Boolean) {
         context.dataStore.edit { it[Keys.AUTO_DOWNLOAD] = value }
+    }
+
+    suspend fun setCheckSelfUpdates(value: Boolean) {
+        context.dataStore.edit { it[Keys.CHECK_SELF_UPDATES] = value }
     }
 }

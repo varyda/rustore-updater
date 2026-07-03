@@ -10,6 +10,7 @@ import retrofit2.Retrofit
 import ru.app.rustoreupdater.data.network.RuStoreApi
 import ru.app.rustoreupdater.data.repo.AppRepository
 import ru.app.rustoreupdater.data.repo.SettingsStore
+import ru.app.rustoreupdater.selfupdate.SelfUpdater
 import java.util.concurrent.TimeUnit
 
 /**
@@ -24,6 +25,7 @@ object ServiceLocator {
     @Volatile private var apiBacking: RuStoreApi? = null
     @Volatile private var settingsBacking: SettingsStore? = null
     @Volatile private var repository: AppRepository? = null
+    @Volatile private var selfUpdater: SelfUpdater? = null
 
     fun init(context: Context) {
         appContext = context.applicationContext
@@ -55,6 +57,14 @@ object ServiceLocator {
         repository?.let { return it }
         return synchronized(this) {
             repository ?: AppRepository.fromContext(context.applicationContext, api).also { repository = it }
+        }
+    }
+
+    /** Lazily-created [SelfUpdater] scoped to the application context. */
+    fun selfUpdater(): SelfUpdater {
+        selfUpdater?.let { return it }
+        return synchronized(this) {
+            selfUpdater ?: SelfUpdater(appContext).also { selfUpdater = it }
         }
     }
 

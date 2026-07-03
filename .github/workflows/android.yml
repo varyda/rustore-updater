@@ -29,34 +29,76 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
+      - name: Compute version
+        id: ver
+        run: |
+          # On a tag v1.2 -> versionName=1.2, versionCode from run number.
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            VNAME="${GITHUB_REF#refs/tags/v}"
+          else
+            VNAME="0.0-dev"
+          fi
+          # versionCode: monotonic integer = GitHub run number (guaranteed increasing).
+          VCODE="${GITHUB_RUN_NUMBER}"
+          echo "version_name=$VNAME" >> "$GITHUB_OUTPUT"
+          echo "version_code=$VCODE" >> "$GITHUB_OUTPUT"
+          echo "Resolved versionName=$VNAME versionCode=$VCODE"
+
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
       - name: Build debug APK
-        run: ./gradlew :app:assembleDebug --no-daemon
+        env:
+          VERSION_CODE: ${{ steps.ver.outputs.version_code }}
+          VERSION_NAME: ${{ steps.ver.outputs.version_name }}
+        run: |
+          ./gradlew :app:assembleDebug --no-daemon \
+            -PversionCode="$VERSION_CODE" -PversionName="$VERSION_NAME"
 
-      - name: Prepare APK
+      - name: Prepare artifacts
+        env:
+          VERSION_NAME: ${{ steps.ver.outputs.version_name }}
+          VERSION_CODE: ${{ steps.ver.outputs.version_code }}
         run: |
           mkdir -p output
-          cp app/build/outputs/apk/debug/app-debug.apk \
-             output/rustore-updater-$(date -u +'%Y%m%d')-${GITHUB_SHA::7}.apk
+          APK_NAME="rustore-updater-${VERSION_NAME}.apk"
+          cp app/build/outputs/apk/debug/app-debug.apk "output/${APK_NAME}"
+
+          # Manifest consumed by the in-app self-updater.
+          APK_URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/latest/${APK_NAME}"
+          APK_SIZE=$(stat -c%s "output/${APK_NAME}")
+          cat > output/update.json <<EOF
+          {
+            "versionCode": ${VERSION_CODE},
+            "versionName": "${VERSION_NAME}",
+            "apkUrl": "${APK_URL}",
+            "apkSizeBytes": ${APK_SIZE},
+            "releaseNotes": "Автоматическая сборка ${VERSION_NAME}"
+          }
+          EOF
+          echo "--- update.json ---"; cat output/update.json
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: rustore-updater-apk
-          path: output/*.apk
+          path: output/*
           retention-days: 30
           compression-level: 0
 
       # Обновляемый pre-release «latest» — стабильная публичная ссылка для скачивания
+      # и источник update.json для самообновления приложения.
       - name: Update latest pre-release
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION_NAME: ${{ steps.ver.outputs.version_name }}
         run: |
+          APK_NAME="rustore-updater-${VERSION_NAME}.apk"
           gh release delete latest --yes --cleanup-tag 2>/dev/null || true
-          gh release create latest output/*.apk \
+          gh release create latest \
+            "output/${APK_NAME}" \
+            "output/update.json" \
             --title "🚀 Latest Build" \
             --notes "Автоматическая сборка из коммита \`${GITHUB_SHA::7}\` от $(date -u +'%Y-%m-%d %H:%M UTC')." \
             --prerelease
@@ -66,8 +108,12 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v')
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION_NAME: ${{ steps.ver.outputs.version_name }}
         run: |
           TAG=${GITHUB_REF#refs/tags/}
-          gh release create "$TAG" output/*.apk \
+          APK_NAME="rustore-updater-${VERSION_NAME}.apk"
+          gh release create "$TAG" \
+            "output/${APK_NAME}" \
+            "output/update.json" \
             --title "$TAG" \
             --generate-notes

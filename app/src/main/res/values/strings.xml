@@ -52,6 +52,14 @@
     <string name="settings_about">О приложении</string>
     <string name="settings_checking">Проверка…</string>
     <string name="settings_check_done">Проверка завершена</string>
+    <string name="settings_self_update">Обновление приложения</string>
+
+    <!-- Self-update -->
+    <string name="self_update_available">Доступна версия %1$s</string>
+    <string name="self_update_download">Скачать и обновить</string>
+    <string name="self_update_downloading">Скачивается версия %1$s…</string>
+    <string name="self_update_uptodate">Установлена последняя версия</string>
+    <string name="self_update_error">Не удалось проверить обновления</string>
 
     <!-- Notifications -->
     <string name="notif_channel_updates">Обновления</string>

@@ -11,6 +11,7 @@ import androidx.core.app.NotificationCompat
 import ru.app.rustoreupdater.data.db.TrackedAppEntity
 import ru.app.rustoreupdater.install.ApkInstaller
 import ru.app.rustoreupdater.install.InstallTrampolineActivity
+import ru.app.rustoreupdater.selfupdate.SelfUpdater
 import java.io.File
 
 /**
@@ -25,6 +26,8 @@ object Notifier {
 
     const val NOTIF_UPDATE_BASE = 1000
     const val NOTIF_DOWNLOAD_BASE = 2000
+    const val NOTIF_SELF_UPDATE_AVAILABLE = 3000
+    const val NOTIF_SELF_UPDATE_READY = 3001
 
     fun ensureChannels(context: Context) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
@@ -105,5 +108,62 @@ object Notifier {
 
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         nm.notify(NOTIF_DOWNLOAD_BASE + (app.appId.hashCode() and 0x3ff), notif)
+    }
+
+    /**
+     * Notify that a newer version of *this app* is available on GitHub.
+     * Tapping opens the app on the Settings screen where the user can trigger
+     * the download. Shown from the background [UpdateCheckWorker].
+     *
+     * @param newVersionName human-readable version (e.g. "1.2").
+     */
+    fun notifySelfUpdateAvailable(context: Context, newVersionName: String) {
+        ensureChannels(context)
+        val launchIntent = context.packageManager.getLaunchIntentForPackage(context.packageName)
+        val pi = PendingIntent.getActivity(
+            context,
+            NOTIF_SELF_UPDATE_AVAILABLE,
+            launchIntent ?: Intent(),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+        val notif = NotificationCompat.Builder(context, CHANNEL_UPDATES)
+            .setSmallIcon(android.R.drawable.stat_sys_download_done)
+            .setContentTitle("RuStore Updater: доступно обновление $newVersionName")
+            .setContentText("Нажмите, чтобы обновить приложение")
+            .setAutoCancel(true)
+            .setContentIntent(pi)
+            .build()
+        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        nm.notify(NOTIF_SELF_UPDATE_AVAILABLE, notif)
+    }
+
+    /**
+     * Notify that the self-update APK has finished downloading and is ready to
+     * install. Tapping launches the system installer for the new build.
+     */
+    fun notifySelfUpdateReady(context: Context, apkFile: File) {
+        ensureChannels(context)
+        val intent = InstallTrampolineActivity.newInstallIntent(context, apkFile.absolutePath)
+        val pi = PendingIntent.getActivity(
+            context,
+            NOTIF_SELF_UPDATE_READY,
+            intent,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+        val canInstall = ApkInstaller.canRequestInstall(context)
+        val notif = NotificationCompat.Builder(context, CHANNEL_DOWNLOADS)
+            .setSmallIcon(android.R.drawable.stat_sys_download_done)
+            .setContentTitle("RuStore Updater: готово к установке")
+            .setContentText("Новая версия загружена — нажмите для установки")
+            .setAutoCancel(true)
+            .setContentIntent(pi)
+            .addAction(
+                android.R.drawable.ic_menu_set_as,
+                if (canInstall) "Установить" else "Разрешить установку",
+                pi
+            )
+            .build()
+        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        nm.notify(NOTIF_SELF_UPDATE_READY, notif)
     }
 }

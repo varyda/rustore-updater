@@ -13,6 +13,7 @@ import kotlinx.coroutines.launch
 import ru.app.rustoreupdater.Notifier
 import ru.app.rustoreupdater.data.repo.AppRepository
 import ru.app.rustoreupdater.di.ServiceLocator
+import ru.app.rustoreupdater.selfupdate.SelfUpdater
 
 /**
  * Listens for [DownloadManager.ACTION_DOWNLOAD_COMPLETE] for APK downloads that we
@@ -41,6 +42,16 @@ class ApkDownloadReceiver : BroadcastReceiver() {
         scope.launch {
             val file = ApkDownloader.fileForDownloadId(context, downloadId)
             ActiveDownloads.remove(downloadId)
+
+            // Self-update download: route through the dedicated notification.
+            if (appId == SelfUpdater.SELF_UPDATE_APP_ID) {
+                Log.d(TAG, "self-update APK downloaded: ${file?.absolutePath}")
+                if (file != null && file.exists()) {
+                    Notifier.notifySelfUpdateReady(context, file)
+                }
+                return@launch
+            }
+
             val app = repo.observeApp(appId).first()
             Log.d(TAG, "file=${file?.absolutePath} exists=${file?.exists()} app=$app")
             if (file != null && file.exists() && app != null) {

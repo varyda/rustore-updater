@@ -1,18 +1,24 @@
 package ru.app.rustoreupdater.ui.screens
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -24,12 +30,15 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import ru.app.rustoreupdater.R
 import ru.app.rustoreupdater.data.repo.CheckInterval
+import ru.app.rustoreupdater.selfupdate.SelfUpdateState
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(vm: SettingsViewModel = viewModel()) {
     val interval by vm.intervalHours.collectAsState()
     val autoDownload by vm.autoDownload.collectAsState()
+    val checkSelfUpdates by vm.checkSelfUpdates.collectAsState()
+    val selfUpdateState by vm.selfUpdateState.collectAsState()
 
     Scaffold(
         topBar = { TopAppBar(title = { Text(stringResource(R.string.nav_settings)) }) }
@@ -58,7 +67,7 @@ fun SettingsScreen(vm: SettingsViewModel = viewModel()) {
             Row(
                 Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = androidx.compose.foundation.layout.Arrangement.SpaceBetween,
+                horizontalArrangement = Arrangement.SpaceBetween,
             ) {
                 Column(Modifier.weight(1f)) {
                     Text(stringResource(R.string.settings_auto_download), style = MaterialTheme.typography.titleMedium)
@@ -71,16 +80,130 @@ fun SettingsScreen(vm: SettingsViewModel = viewModel()) {
                 Switch(checked = autoDownload, onCheckedChange = vm::setAutoDownload)
             }
 
+            Spacer(Modifier.height(16.dp))
+            HorizontalDivider()
+            Spacer(Modifier.height(16.dp))
+
+            // --- Self-update section -------------------------------------------------
+            SelfUpdateSection(
+                installedVersion = vm.installedVersionName,
+                state = selfUpdateState,
+                checkEnabled = checkSelfUpdates,
+                onToggleCheck = vm::setCheckSelfUpdates,
+                onCheck = vm::checkForSelfUpdate,
+                onDownload = vm::downloadSelfUpdate,
+            )
+
             Spacer(Modifier.height(24.dp))
             HorizontalDivider()
             Spacer(Modifier.height(16.dp))
             Text(stringResource(R.string.settings_about), style = MaterialTheme.typography.titleMedium)
             Spacer(Modifier.height(6.dp))
             Text(
-                "RuStore Updater 1.0\nСкачивает и обновляет приложения из RuStore без приложения RuStore.",
+                "RuStore Updater ${vm.installedVersionName}\nСкачивает и обновляет приложения из RuStore без приложения RuStore.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+        }
+    }
+}
+
+@Composable
+private fun SelfUpdateSection(
+    installedVersion: String,
+    state: SelfUpdateState,
+    checkEnabled: Boolean,
+    onToggleCheck: (Boolean) -> Unit,
+    onCheck: () -> Unit,
+    onDownload: () -> Unit,
+) {
+    Text(stringResource(R.string.settings_self_update), style = MaterialTheme.typography.titleMedium)
+    Spacer(Modifier.height(8.dp))
+
+    Row(
+        Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text("Проверять обновления приложения", style = MaterialTheme.typography.bodyMedium)
+            Text(
+                "Текущая версия: $installedVersion",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Switch(checked = checkEnabled, onCheckedChange = onToggleCheck)
+    }
+
+    Spacer(Modifier.height(12.dp))
+
+    when (state) {
+        SelfUpdateState.Idle, SelfUpdateState.UpToDate -> {
+            OutlinedButton(onClick = onCheck, enabled = checkEnabled) {
+                Text(stringResource(R.string.settings_check_now))
+            }
+            if (state is SelfUpdateState.UpToDate) {
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    stringResource(R.string.self_update_uptodate),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+
+        SelfUpdateState.Checking -> {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                CircularProgressIndicator(modifier = Modifier.height(20.dp), strokeWidth = 2.dp)
+                Spacer(Modifier.height(0.dp))
+                Text(
+                    "  " + stringResource(R.string.settings_checking),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
+        }
+
+        is SelfUpdateState.Available -> {
+            Column {
+                Text(
+                    stringResource(R.string.self_update_available, state.info.versionName),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                state.info.releaseNotes?.takeIf { it.isNotBlank() }?.let { notes ->
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        notes,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Spacer(Modifier.height(10.dp))
+                Button(onClick = onDownload) {
+                    Text(stringResource(R.string.self_update_download))
+                }
+            }
+        }
+
+        is SelfUpdateState.Downloading -> {
+            Text(
+                stringResource(R.string.self_update_downloading, state.info.versionName),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.primary,
+            )
+        }
+
+        is SelfUpdateState.Error -> {
+            Column {
+                Text(
+                    stringResource(R.string.self_update_error),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.error,
+                )
+                Spacer(Modifier.height(8.dp))
+                OutlinedButton(onClick = onCheck) { Text(stringResource(R.string.action_retry)) }
+            }
         }
     }
 }

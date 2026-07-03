@@ -24,6 +24,14 @@ class UpdateCheckWorker(
         val repo = ServiceLocator.appRepository(applicationContext)
         val autoDownload = ServiceLocator.settingsStore.autoDownload.first()
 
+        // Self-update check (best-effort, never blocks RuStore checks).
+        runCatching {
+            val checkSelf = ServiceLocator.settingsStore.checkSelfUpdates.first()
+            if (checkSelf) {
+                checkSelfUpdate()
+            }
+        }
+
         val updates = try {
             repo.checkForUpdates()
         } catch (e: Exception) {
@@ -45,6 +53,19 @@ class UpdateCheckWorker(
             }
         }
         return Result.success()
+    }
+
+    /**
+     * Fetches the latest [ru.app.rustoreupdater.selfupdate.UpdateInfo] from GitHub
+     * and posts a notification when a newer build of this app exists. Runs as
+     * part of the periodic update check so no extra scheduler is required.
+     */
+    private suspend fun checkSelfUpdate() {
+        val updater = ServiceLocator.selfUpdater()
+        val info = updater.fetchLatest() ?: return
+        if (updater.isNewer(info)) {
+            Notifier.notifySelfUpdateAvailable(applicationContext, info.versionName)
+        }
     }
 
     companion object {
