@@ -1,0 +1,10 @@
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!-- Base theme used by the Activity before Compose takes over.
+         Compose draws its own Material3 theme on top; this XML theme just
+         provides window background, status bar handling and default styles. -->
+    <style name="Theme.RuStoreUpdater" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:windowBackground">@color/ic_launcher_background</item>
+        <item name="android:windowLightStatusBar" tools:targetApi="m">true</item>
+    </style>
+</resources>

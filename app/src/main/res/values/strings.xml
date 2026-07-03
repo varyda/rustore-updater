@@ -1,0 +1,67 @@
+<resources>
+    <string name="app_name">RuStore Updater</string>
+
+    <!-- Bottom nav -->
+    <string name="nav_tracked">Мои приложения</string>
+    <string name="nav_search">Поиск</string>
+    <string name="nav_settings">Настройки</string>
+
+    <!-- Tracked list -->
+    <string name="tracked_empty_title">Пока нет отслеживаемых приложений</string>
+    <string name="tracked_empty_subtitle">Найдите приложения во вкладке «Поиск» и добавьте их сюда</string>
+    <string name="tracked_update_available">Доступно обновление</string>
+    <string name="tracked_up_to_date">Актуально</string>
+    <string name="tracked_btn_update">Обновить</string>
+    <string name="tracked_btn_install">Установить</string>
+    <string name="tracked_btn_installing">Установка…</string>
+    <string name="tracked_btn_updating">Обновление…</string>
+    <string name="tracked_btn_downloading">Скачивание…</string>
+    <string name="tracked_not_installed">Не установлено</string>
+    <string name="tracked_version_format">v%1$s</string>
+    <string name="tracked_update_format">%1$s → %2$s</string>
+
+    <!-- Search -->
+    <string name="search_hint">Поиск приложений…</string>
+    <string name="search_empty">Введите запрос для поиска</string>
+    <string name="search_no_results">Ничего не найдено</string>
+    <string name="search_loading">Поиск…</string>
+    <string name="search_error">Ошибка поиска</string>
+    <string name="search_btn_track">Отслеживать</string>
+    <string name="search_btn_tracked">Отслеживается</string>
+
+    <!-- Detail -->
+    <string name="detail_developer">Разработчик</string>
+    <string name="detail_version">Версия</string>
+    <string name="detail_size">Размер</string>
+    <string name="detail_updated">Обновлено</string>
+    <string name="detail_category">Категория</string>
+    <string name="detail_description">Описание</string>
+    <string name="detail_whats_new">Что нового</string>
+    <string name="detail_btn_download_apk">Скачать APK</string>
+    <string name="detail_btn_update_apk">Обновить APK</string>
+    <string name="detail_btn_open_app">Открыть приложение</string>
+    <string name="detail_btn_remove">Удалить из отслеживаемых</string>
+    <string name="detail_btn_uninstall">Удалить с устройства</string>
+    <string name="detail_btn_uninstall_settings">Удалить (через настройки)</string>
+    <string name="detail_btn_open_store">Открыть в RuStore</string>
+
+    <!-- Settings -->
+    <string name="settings_check_interval">Интервал проверки обновлений</string>
+    <string name="settings_check_now">Проверить сейчас</string>
+    <string name="settings_auto_download">Автоскачивание обновлений</string>
+    <string name="settings_about">О приложении</string>
+    <string name="settings_checking">Проверка…</string>
+    <string name="settings_check_done">Проверка завершена</string>
+
+    <!-- Notifications -->
+    <string name="notif_channel_updates">Обновления</string>
+    <string name="notif_channel_downloads">Загрузки</string>
+    <string name="notif_update_title">Доступно обновление</string>
+    <string name="notif_download_title">Загружено обновление</string>
+    <string name="notif_download_text">Готово к установке</string>
+
+    <!-- Common -->
+    <string name="action_retry">Повторить</string>
+    <string name="state_loading">Загрузка…</string>
+    <string name="error_generic">Что-то пошло не так</string>
+</resources>

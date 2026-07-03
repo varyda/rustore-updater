@@ -1,0 +1,37 @@
+# Gradle
+.gradle/
+build/
+
+# Kotlin
+.kotlin/
+
+# Local configuration (SDK paths, signing keys)
+local.properties
+
+# IntelliJ / Android Studio
+*.iml
+.idea/
+.idea/modules.xml
+.idea/workspace.xml
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Signing / keystore
+*.jks
+*.keystore
+keystore.properties
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs / crash
+*.log
+hs_err_pid*
+
+# APK / build outputs (не коммитим бинарники сборки)
+*.apk
+*.aab
+*.ap_
+*.dex

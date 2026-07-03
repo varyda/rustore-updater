@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- The APK is downloaded to getExternalFilesDir(DIRECTORY_DOWNLOADS)/downloads,
+         i.e. <external-files>/Download/downloads. Cover the whole external-files root
+         and its common subdirs so FileProvider.getUriForFile always finds a match. -->
+    <external-files-path name="external_files_root" path="." />
+    <external-files-path name="external_files_download" path="Download/" />
+    <external-files-path name="external_files_downloads" path="Download/downloads/" />
+
+    <external-path name="external" path="." />
+    <cache-path name="cache_root" path="." />
+    <files-path name="files_root" path="." />
+</paths>
