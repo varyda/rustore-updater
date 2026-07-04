@@ -140,7 +140,9 @@ private fun SelfUpdateSection(
 
     when (state) {
         SelfUpdateState.Idle, SelfUpdateState.UpToDate -> {
-            OutlinedButton(onClick = onCheck, enabled = checkEnabled) {
+            // The "check now" button is always enabled — manual checking must not
+            // depend on the background auto-check toggle.
+            OutlinedButton(onClick = onCheck) {
                 Text(stringResource(R.string.settings_check_now))
             }
             if (state is SelfUpdateState.UpToDate) {

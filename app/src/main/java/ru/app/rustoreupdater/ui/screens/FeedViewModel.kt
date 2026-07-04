@@ -13,11 +13,15 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import ru.app.rustoreupdater.R
 import ru.app.rustoreupdater.data.network.SearchItemDto
+import ru.app.rustoreupdater.di.ServiceLocator
+import ru.app.rustoreupdater.selfupdate.SelfUpdateState
 import ru.app.rustoreupdater.ui.BaseVm
 
 /**
@@ -65,6 +69,26 @@ class FeedViewModel(app: Application) : BaseVm(app) {
     /** True while a (re)load triggered by pull-to-refresh is in flight. */
     private val _refreshing = MutableStateFlow(false)
     val refreshing: StateFlow<Boolean> = _refreshing.asStateFlow()
+
+    private val selfUpdater get() = ServiceLocator.selfUpdater()
+
+    /** Reactive view of the self-update flow, surfaced to the Feed banner. */
+    val selfUpdateState: StateFlow<SelfUpdateState> =
+        selfUpdater.state.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), SelfUpdateState.Idle)
+
+    /** Query GitHub for a newer build (manual check from the feed toolbar). */
+    fun checkForSelfUpdate() {
+        viewModelScope.launch { selfUpdater.runCheck() }
+    }
+
+    /** Start downloading the APK for an available update. */
+    fun downloadSelfUpdate() {
+        viewModelScope.launch {
+            val info = (selfUpdater.state.value as? SelfUpdateState.Available)?.info ?: return@launch
+            val id = selfUpdater.downloadApk(info)
+            if (id < 0) selfUpdater.setError("Не удалось начать загрузку")
+        }
+    }
 
     init {
         viewModelScope.launch {

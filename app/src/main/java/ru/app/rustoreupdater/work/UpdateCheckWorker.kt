@@ -57,14 +57,26 @@ class UpdateCheckWorker(
 
     /**
      * Fetches the latest [ru.app.rustoreupdater.selfupdate.UpdateInfo] from GitHub
-     * and posts a notification when a newer build of this app exists. Runs as
-     * part of the periodic update check so no extra scheduler is required.
+     * and, when a newer build exists:
+     *   1. posts an "update available" notification (always),
+     *   2. starts downloading the APK right away (full self-update: the finished
+     *      download is routed by [ApkDownloadReceiver] to a "ready to install"
+     *      notification with an install action).
+     *
+     * The download is best-effort; failures are non-fatal and only the
+     * availability notification is shown.
      */
     private suspend fun checkSelfUpdate() {
         val updater = ServiceLocator.selfUpdater()
         val info = updater.fetchLatest() ?: return
-        if (updater.isNewer(info)) {
-            Notifier.notifySelfUpdateAvailable(applicationContext, info.versionName)
+        if (!updater.isNewer(info)) return
+
+        Notifier.notifySelfUpdateAvailable(applicationContext, info.versionName)
+        try {
+            updater.downloadApk(info)
+        } catch (e: Exception) {
+            // Non-fatal: the availability notification above already lets the user
+            // open the app and trigger the download manually from Settings.
         }
     }
 

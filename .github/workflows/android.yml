@@ -54,12 +54,29 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      - name: Build debug APK
+      # Decode the release keystore (stored as base64 in repo secrets) to a temp
+      # file. The gradle build reads it via KEYSTORE_PATH. Skipping this step
+      # makes the build fall back to debug signing — useful for PR builds, but
+      # the published "latest" / tagged releases MUST run with the secret set,
+      # otherwise existing installs can't be updated (signature mismatch).
+      - name: Decode release keystore
+        if: env.KEYSTORE_BASE64 != ''
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+        run: |
+          echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.keystore"
+          echo "KEYSTORE_PATH=$RUNNER_TEMP/release.keystore" >> "$GITHUB_ENV"
+
+      - name: Build release APK
         env:
           VERSION_CODE: ${{ steps.ver.outputs.version_code }}
           VERSION_NAME: ${{ steps.ver.outputs.version_name }}
+          KEYSTORE_PATH: ${{ env.KEYSTORE_PATH }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
-          ./gradlew :app:assembleDebug --no-daemon \
+          ./gradlew :app:assembleRelease --no-daemon \
             -PversionCode="$VERSION_CODE" -PversionName="$VERSION_NAME"
 
       - name: Prepare artifacts
@@ -69,7 +86,7 @@ jobs:
         run: |
           mkdir -p output
           APK_NAME="rustore-updater-${VERSION_NAME}.apk"
-          cp app/build/outputs/apk/debug/app-debug.apk "output/${APK_NAME}"
+          cp app/build/outputs/apk/release/app-release.apk "output/${APK_NAME}"
 
           # Manifest consumed by the in-app self-updater.
           APK_URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/latest/${APK_NAME}"
