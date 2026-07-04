@@ -2,9 +2,23 @@
     <string name="app_name">RuStore Updater</string>
 
     <!-- Bottom nav -->
+    <string name="nav_feed">Лента</string>
     <string name="nav_tracked">Мои приложения</string>
     <string name="nav_search">Поиск</string>
     <string name="nav_settings">Настройки</string>
+
+    <!-- Feed -->
+    <string name="feed_title">Лента</string>
+    <string name="feed_section_games">Игры</string>
+    <string name="feed_section_messengers">Мессенджеры</string>
+    <string name="feed_section_browsers">Браузеры</string>
+    <string name="feed_section_social">Соцсети</string>
+    <string name="feed_section_banking">Банкинг</string>
+    <string name="feed_section_marketplaces">Маркетплейсы</string>
+    <string name="feed_loading">Загрузка ленты…</string>
+    <string name="feed_error">Ошибка загрузки</string>
+    <string name="feed_section_empty">Ничего не найдено</string>
+    <string name="feed_action_all">Все</string>
 
     <!-- Tracked list -->
     <string name="tracked_empty_title">Пока нет отслеживаемых приложений</string>

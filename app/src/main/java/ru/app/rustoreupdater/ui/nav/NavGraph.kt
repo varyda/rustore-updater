@@ -16,6 +16,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import ru.app.rustoreupdater.ui.screens.DetailScreen
+import ru.app.rustoreupdater.ui.screens.FeedScreen
 import ru.app.rustoreupdater.ui.screens.SearchScreen
 import ru.app.rustoreupdater.ui.screens.SettingsScreen
 import ru.app.rustoreupdater.ui.screens.TrackedScreen
@@ -37,7 +38,7 @@ fun NavGraph() {
                             selected = currentRoute == route.route,
                             onClick = {
                                 nav.navigate(route.route) {
-                                    popUpTo(Route.Tracked.route) { saveState = true }
+                                    popUpTo(Route.Feed.route) { saveState = true }
                                     launchSingleTop = true
                                     restoreState = true
                                 }
@@ -52,14 +53,31 @@ fun NavGraph() {
     ) { padding ->
         NavHost(
             navController = nav,
-            startDestination = Route.Tracked.route,
+            startDestination = Route.Feed.route,
             modifier = Modifier.padding(padding),
         ) {
+            composable(Route.Feed.route) {
+                FeedScreen(
+                    onOpenDetail = { id, pkg -> nav.navigate(Route.Detail.build(id, pkg)) },
+                    onOpenAll = { query -> nav.navigate(Route.SearchResults.build(query)) },
+                )
+            }
             composable(Route.Tracked.route) {
                 TrackedScreen(onOpenDetail = { id, pkg -> nav.navigate(Route.Detail.build(id, pkg)) })
             }
             composable(Route.Search.route) {
                 SearchScreen(onOpenDetail = { id, pkg -> nav.navigate(Route.Detail.build(id, pkg)) })
+            }
+            composable(
+                route = Route.SearchResults.route,
+                arguments = listOf(
+                    navArgument(Route.SearchResults.ARG_QUERY) { type = NavType.StringType },
+                ),
+            ) {
+                SearchScreen(
+                    onOpenDetail = { id, pkg -> nav.navigate(Route.Detail.build(id, pkg)) },
+                    onBack = { nav.popBackStack() },
+                )
             }
             composable(Route.Settings.route) {
                 SettingsScreen()

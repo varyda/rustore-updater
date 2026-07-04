@@ -15,8 +15,8 @@ android {
         minSdk = 24
         targetSdk = 35
         // Overridable from CI via -PversionCode / -PversionName gradle properties.
-        versionCode = (project.findProperty("versionCode") as? String)?.toIntOrNull() ?: 2
-        versionName = (project.findProperty("versionName") as? String) ?: "1.1"
+        versionCode = (project.findProperty("versionCode") as? String)?.toIntOrNull() ?: 3
+        versionName = (project.findProperty("versionName") as? String) ?: "1.2"
         vectorDrawables { useSupportLibrary = true }
     }
 
@@ -81,6 +81,9 @@ dependencies {
 
     // Image loading
     implementation(libs.coil.compose)
+
+    // Immutable collections — gives Compose a stable List type so feed sections are skippable.
+    implementation(libs.kotlinx.collections.immutable)
 
     // WorkManager
     implementation(libs.androidx.work.runtime.ktx)

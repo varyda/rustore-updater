@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -24,6 +25,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Search
@@ -52,6 +54,7 @@ import ru.app.rustoreupdater.ui.components.LoadingState
 @Composable
 fun SearchScreen(
     onOpenDetail: (String, String?) -> Unit,
+    onBack: (() -> Unit)? = null,
     vm: SearchViewModel = viewModel(),
 ) {
     val query by vm.query.collectAsState()
@@ -62,19 +65,31 @@ fun SearchScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(title = { Text(stringResource(R.string.nav_search)) })
+            TopAppBar(
+                title = { Text(if (vm.readOnly) query.ifBlank { stringResource(R.string.nav_search) } else stringResource(R.string.nav_search)) },
+                navigationIcon = {
+                    if (vm.readOnly && onBack != null) {
+                        IconButton(onClick = onBack) {
+                            Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = null)
+                        }
+                    }
+                },
+            )
         }
     ) { padding ->
         Column(Modifier.padding(padding)) {
-            OutlinedTextField(
-                value = query,
-                onValueChange = vm::onQueryChange,
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
-                placeholder = { Text(stringResource(R.string.search_hint)) },
-                leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
-                singleLine = true,
-                shape = RoundedCornerShape(16.dp),
-            )
+            // Hide the editable field in read-only (feed "All") mode.
+            if (!vm.readOnly) {
+                OutlinedTextField(
+                    value = query,
+                    onValueChange = vm::onQueryChange,
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+                    placeholder = { Text(stringResource(R.string.search_hint)) },
+                    leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
+                    singleLine = true,
+                    shape = RoundedCornerShape(16.dp),
+                )
+            }
 
             when {
                 loading -> LoadingState(label = stringResource(R.string.search_loading))
@@ -114,7 +129,7 @@ private fun SearchRow(
                 model = ImageRequest.Builder(context).data(item.iconUrl).crossfade(true).build(),
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
-                modifier = Modifier.width(56.dp).clip(RoundedCornerShape(12.dp)),
+                modifier = Modifier.size(56.dp).clip(RoundedCornerShape(12.dp)),
             )
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {

@@ -2,6 +2,7 @@ package ru.app.rustoreupdater.ui.screens
 
 import android.app.Application
 import android.util.Log
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -12,9 +13,18 @@ import kotlinx.coroutines.launch
 import ru.app.rustoreupdater.data.network.SearchItemDto
 import ru.app.rustoreupdater.ui.BaseVm
 
-class SearchViewModel(app: Application) : BaseVm(app) {
+class SearchViewModel(app: Application, handle: SavedStateHandle) : BaseVm(app) {
 
-    private val _query = MutableStateFlow("")
+    /**
+     * When opened as "All" from a feed category, the query comes from the nav arg and the field
+     * is read-only. When opened as the regular Search tab, [predefinedQuery] is null.
+     */
+    private val predefinedQuery: String? = handle.get<String>("query")?.let {
+        java.net.URLDecoder.decode(it, "UTF-8")
+    }
+    val readOnly: Boolean get() = predefinedQuery != null
+
+    private val _query = MutableStateFlow(predefinedQuery ?: "")
     val query: StateFlow<String> = _query.asStateFlow()
 
     private val _results = MutableStateFlow<List<SearchItemDto>>(emptyList())
@@ -34,6 +44,10 @@ class SearchViewModel(app: Application) : BaseVm(app) {
     init {
         viewModelScope.launch {
             repo.trackedApps.collect { list -> _tracked.value = list.map { it.appId }.toSet() }
+        }
+        // Pre-filled mode (opened from a feed category): run the search immediately.
+        predefinedQuery?.let { q ->
+            searchJob = viewModelScope.launch { runSearch(q) }
         }
     }
 
