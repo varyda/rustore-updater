@@ -11,10 +11,19 @@ on:
 permissions:
   contents: write
 
+# Serialise publishes: two pushes in quick succession would otherwise race on the
+# rolling `latest` release (its asset pruning could delete the newer APK).
+concurrency:
+  group: build-release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   build:
     name: Build APK
     runs-on: ubuntu-latest
+    # Job-level so `if: env.KEYSTORE_BASE64 != ''` below is evaluated reliably.
+    env:
+      KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
 
     steps:
       - name: Checkout
@@ -32,20 +41,16 @@ jobs:
       - name: Compute version
         id: ver
         run: |
-          # On a tag v1.2 -> versionName=1.2.
-          # On main push -> dev build with a high versionCode so in-app self-update
-          #   always treats the rolling 'latest' build as newer than any installed copy.
+          # Every build uses the same monotonic versionCode: 900000 + run number.
+          # The old scheme gave tag builds a tiny code (v1.2 -> 12), so Android
+          # rejected them as a downgrade over an installed dev build and the
+          # self-updater never offered them. versionName stays human-readable:
+          #   main push -> dev-<sha7>, tag v1.3 -> 1.3
+          VCODE="$((900000 + GITHUB_RUN_NUMBER))"
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
             VNAME="${GITHUB_REF#refs/tags/v}"
-            # Strip non-numeric dots -> integer, e.g. v1.2 -> 12; fallback to run number.
-            VCODE_NUM="${VNAME//./}"
-            [[ "$VCODE_NUM" =~ ^[0-9]+$ ]] || VCODE_NUM="$GITHUB_RUN_NUMBER"
-            VCODE="$VCODE_NUM"
           else
             VNAME="dev-${GITHUB_SHA::7}"
-            # Base 900000 + run number keeps dev builds above any released 1.x/2.x
-            # while staying below the 32-bit int ceiling (max ~2147483647).
-            VCODE="$((900000 + GITHUB_RUN_NUMBER))"
           fi
           echo "version_name=$VNAME" >> "$GITHUB_OUTPUT"
           echo "version_code=$VCODE" >> "$GITHUB_OUTPUT"
@@ -55,17 +60,40 @@ jobs:
         run: chmod +x gradlew
 
       # Decode the release keystore (stored as base64 in repo secrets) to a temp
-      # file. The gradle build reads it via KEYSTORE_PATH. Skipping this step
-      # makes the build fall back to debug signing — useful for PR builds, but
-      # the published "latest" / tagged releases MUST run with the secret set,
-      # otherwise existing installs can't be updated (signature mismatch).
+      # file. The gradle build reads it via KEYSTORE_PATH. Without it the build
+      # falls back to debug signing — fine for pull requests, but a published
+      # APK MUST be signed with the same key as the installed one, otherwise
+      # Android refuses the update ("signatures do not match").
       - name: Decode release keystore
         if: env.KEYSTORE_BASE64 != ''
-        env:
-          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
         run: |
           echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.keystore"
           echo "KEYSTORE_PATH=$RUNNER_TEMP/release.keystore" >> "$GITHUB_ENV"
+
+      # Safety net: never publish a debug-signed APK to main/tags. CI runners
+      # generate a fresh random debug key on every run, so such a build could
+      # never be installed over an existing copy.
+      - name: Verify release signing is configured
+        if: github.event_name == 'push'
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "::error::KEYSTORE_BASE64 secret is not set — refusing to publish a debug-signed APK."
+            exit 1
+          fi
+          # KEYSTORE_PATH is exported by the previous step. Checking the file (and
+          # not just the secret) catches a skipped decode step, which would
+          # silently publish a debug-signed APK.
+          if [ -z "$KEYSTORE_PATH" ] || [ ! -f "$KEYSTORE_PATH" ]; then
+            echo "::error::Release keystore was not decoded (KEYSTORE_PATH='$KEYSTORE_PATH') — refusing to publish."
+            exit 1
+          fi
+
+      # Unit tests (some hit the real RuStore backend on purpose, to catch
+      # fingerprint-header / TLS regressions). Non-blocking: a RuStore outage or a
+      # geo-blocked runner must not stop a release build, but a red mark is visible.
+      - name: Unit tests
+        continue-on-error: true
+        run: ./gradlew :app:testDebugUnitTest --no-daemon
 
       - name: Build release APK
         env:
@@ -110,23 +138,6 @@ jobs:
           retention-days: 30
           compression-level: 0
 
-      # Обновляемый pre-release «latest» — стабильная публичная ссылка для скачивания
-      # и источник update.json для самообновления приложения.
-      - name: Update latest pre-release
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          VERSION_NAME: ${{ steps.ver.outputs.version_name }}
-        run: |
-          APK_NAME="rustore-updater-${VERSION_NAME}.apk"
-          gh release delete latest --yes --cleanup-tag 2>/dev/null || true
-          gh release create latest \
-            "output/${APK_NAME}" \
-            "output/update.json" \
-            --title "🚀 Latest Build" \
-            --notes "Автоматическая сборка из коммита \`${GITHUB_SHA::7}\` от $(date -u +'%Y-%m-%d %H:%M UTC')." \
-            --prerelease
-
       # Полноценный Release по тегу v*
       - name: Create GitHub Release
         if: startsWith(github.ref, 'refs/tags/v')
@@ -141,3 +152,32 @@ jobs:
             "output/update.json" \
             --title "$TAG" \
             --generate-notes
+
+      # Обновляемый pre-release «latest» — стабильная публичная ссылка для скачивания
+      # и источник update.json для самообновления приложения.
+      - name: Publish rolling 'latest' pre-release
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION_NAME: ${{ steps.ver.outputs.version_name }}
+        run: |
+          APK_NAME="rustore-updater-${VERSION_NAME}.apk"
+          NOTES="Автоматическая сборка ${VERSION_NAME} из коммита \`${GITHUB_SHA::7}\` от $(date -u +'%Y-%m-%d %H:%M UTC')."
+
+          if gh release view latest >/dev/null 2>&1; then
+            # Re-upload in place. Deleting the release (as before) removed
+            # update.json for a moment, which made in-flight self-update checks
+            # fail with a 404.
+            gh release upload latest "output/${APK_NAME}" "output/update.json" --clobber
+            gh release edit latest --title "🚀 Latest Build" --notes "$NOTES" --prerelease
+            # Drop APKs from older builds so the asset list does not grow forever.
+            gh release view latest --json assets --jq '.assets[].name' \
+              | grep -v -x -e "${APK_NAME}" -e 'update.json' \
+              | while read -r asset; do gh release delete-asset latest "$asset" --yes; done || true
+          else
+            gh release create latest "output/${APK_NAME}" "output/update.json" \
+              --title "🚀 Latest Build" \
+              --notes "$NOTES" \
+              --prerelease \
+              --target "$GITHUB_SHA"
+          fi

@@ -28,6 +28,7 @@ object Notifier {
     const val NOTIF_DOWNLOAD_BASE = 2000
     const val NOTIF_SELF_UPDATE_AVAILABLE = 3000
     const val NOTIF_SELF_UPDATE_READY = 3001
+    const val NOTIF_DOWNLOAD_FAILED = 3002
 
     fun ensureChannels(context: Context) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
@@ -108,6 +109,38 @@ object Notifier {
 
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         nm.notify(NOTIF_DOWNLOAD_BASE + (app.appId.hashCode() and 0x3ff), notif)
+    }
+
+    /**
+     * Notify that a download failed, so a failed transfer never goes unnoticed.
+     *
+     * @param appName name of the app that was being downloaded, if known.
+     * @param reason short explanation from [ru.app.rustoreupdater.download.ApkDownloader].
+     */
+    fun notifyDownloadFailed(context: Context, appName: String?, reason: String) {
+        ensureChannels(context)
+        val text = if (appName.isNullOrBlank()) {
+            "Не удалось скачать APK: $reason"
+        } else {
+            "$appName: не удалось скачать APK — $reason"
+        }
+        val launchIntent = context.packageManager.getLaunchIntentForPackage(context.packageName)
+        val pi = PendingIntent.getActivity(
+            context,
+            NOTIF_DOWNLOAD_FAILED,
+            launchIntent ?: Intent(),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+        val notif = NotificationCompat.Builder(context, CHANNEL_UPDATES)
+            .setSmallIcon(android.R.drawable.stat_notify_error)
+            .setContentTitle(context.getString(R.string.notif_download_failed_title))
+            .setContentText(text)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(text))
+            .setAutoCancel(true)
+            .setContentIntent(pi)
+            .build()
+        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        nm.notify(NOTIF_DOWNLOAD_FAILED, notif)
     }
 
     /**

@@ -19,9 +19,9 @@ class SearchViewModel(app: Application, handle: SavedStateHandle) : BaseVm(app) 
      * When opened as "All" from a feed category, the query comes from the nav arg and the field
      * is read-only. When opened as the regular Search tab, [predefinedQuery] is null.
      */
-    private val predefinedQuery: String? = handle.get<String>("query")?.let {
-        java.net.URLDecoder.decode(it, "UTF-8")
-    }
+    private val predefinedQuery: String? = handle.get<String>("query")
+        ?.takeIf { it.isNotBlank() }
+        ?.let(::decodeQuery)
     val readOnly: Boolean get() = predefinedQuery != null
 
     private val _query = MutableStateFlow(predefinedQuery ?: "")
@@ -86,6 +86,20 @@ class SearchViewModel(app: Application, handle: SavedStateHandle) : BaseVm(app) 
             } catch (e: Exception) {
                 Log.e("SearchVM", "track failed for $appId / $packageName", e)
             }
+        }
+    }
+
+    private companion object {
+        /**
+         * Decodes the nav argument only when it still looks encoded.
+         *
+         * Navigation versions differ in whether they hand the argument back decoded, and
+         * an unconditional `URLDecoder.decode` both corrupts already-decoded queries and
+         * throws `IllegalArgumentException` on a stray `%` (e.g. the query "100%").
+         */
+        fun decodeQuery(raw: String): String {
+            if (raw.indexOf('%') < 0 && raw.indexOf('+') < 0) return raw
+            return runCatching { java.net.URLDecoder.decode(raw, "UTF-8") }.getOrDefault(raw)
         }
     }
 }

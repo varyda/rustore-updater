@@ -81,6 +81,7 @@
     <string name="notif_update_title">Доступно обновление</string>
     <string name="notif_download_title">Загружено обновление</string>
     <string name="notif_download_text">Готово к установке</string>
+    <string name="notif_download_failed_title">Ошибка загрузки</string>
 
     <!-- Common -->
     <string name="action_retry">Повторить</string>

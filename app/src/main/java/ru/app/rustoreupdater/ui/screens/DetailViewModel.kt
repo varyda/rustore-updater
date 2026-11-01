@@ -15,7 +15,10 @@ import ru.app.rustoreupdater.ui.BaseVm
 class DetailViewModel(app: Application, private val handle: SavedStateHandle) : BaseVm(app) {
 
     val appId: String = handle["appId"] ?: ""
-    private val packageNameArg: String? = handle["packageName"]
+
+    /** Detail is also opened for apps that are not tracked yet, so the package name
+     *  arrives as an optional nav argument; treat a blank value as "unknown". */
+    private val packageNameArg: String? = handle.get<String>("packageName")?.takeIf { it.isNotBlank() }
 
     /** Tracked-app state from the DB (null if not tracked yet). */
     val app = repo.observeApp(appId)

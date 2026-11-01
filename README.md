@@ -5,7 +5,7 @@ Android-приложение для скачивания и обновления
 Использует тот же публичный API, что и сам RuStore (`backapi.rustore.ru`):
 - поиск по каталогу,
 - получение информации о приложении (версия, описание, changelog),
-- прямая ссылка на APK,
+- прямая ссылка на файл приложения (RuStore отдаёт `.zip` с универсальным APK),
 - фоновая проверка обновлений через WorkManager,
 - установка APK через системный диалог Package Installer.
 
@@ -134,13 +134,12 @@ APK появится в `app/build/outputs/apk/release/app-release.apk`.
 app/src/main/java/ru/app/rustoreupdater/
 ├── App.kt                      # Application: инициализация DI, каналов уведомлений, WorkManager
 ├── Notifier.kt                 # Уведомления об обновлениях / завершении загрузки
-├── NotifierActionReceiver.kt   # Обработка кнопки «Установить» в уведомлении
 ├── di/ServiceLocator.kt        # Ручной DI-контейнер (Retrofit, Room, репозиторий)
 ├── data/
 │   ├── db/                     # Room: TrackedAppEntity, AppDao, AppDatabase
-│   ├── network/                # Retrofit: RuStoreApi + DTO под ответ RuStore
+│   ├── network/                # Retrofit: RuStoreApi + DTO + устройство/заголовки RuStore
 │   └── repo/                   # AppRepository, SettingsStore (DataStore)
-├── download/                   # ApkDownloader (DownloadManager), ApkDownloadReceiver
+├── download/                   # ApkDownloader (DownloadManager), ApkDownloadReceiver → ApkPrepareWorker, ApkArchive, DownloadRegistry
 ├── install/ApkInstaller.kt     # Установка APK через FileProvider + системный диалог
 ├── work/                       # UpdateCheckWorker + UpdateScheduler (WorkManager)
 └── ui/
@@ -156,7 +155,7 @@ app/src/main/java/ru/app/rustoreupdater/
 |---|---|
 | Поиск | `GET /applicationData/apps?query=&pageNumber=&pageSize=` |
 | Инфо о приложении | `GET /applicationData/overallInfo/{appId}` |
-| Прямая ссылка на APK | `POST /applicationData/v2/download-link` (тело `{appId, firstInstall:true, ...}`) |
+| Ссылка на файл | `POST /applicationData/v2/download-link` (тело `{appId, firstInstall:true, ...}`); отдаёт `.zip` с `UNIVERSAL_APK_*.apk` внутри |
 
 ## Технологии
 

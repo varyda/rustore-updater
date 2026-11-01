@@ -1,17 +1,12 @@
 package ru.app.rustoreupdater.di
 
 import android.content.Context
-import com.jakewharton.retrofit2.converter.kotlinx.serialization.asConverterFactory
-import kotlinx.serialization.json.Json
-import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.OkHttpClient
-import okhttp3.logging.HttpLoggingInterceptor
-import retrofit2.Retrofit
 import ru.app.rustoreupdater.data.network.RuStoreApi
+import ru.app.rustoreupdater.data.network.RuStoreApiFactory
+import ru.app.rustoreupdater.data.network.RuStoreDevice
 import ru.app.rustoreupdater.data.repo.AppRepository
 import ru.app.rustoreupdater.data.repo.SettingsStore
 import ru.app.rustoreupdater.selfupdate.SelfUpdater
-import java.util.concurrent.TimeUnit
 
 /**
  * Minimal manual dependency container. Avoids pulling in a DI framework for a
@@ -29,12 +24,6 @@ object ServiceLocator {
 
     fun init(context: Context) {
         appContext = context.applicationContext
-    }
-
-    private val json: Json = Json {
-        ignoreUnknownKeys = true
-        coerceInputValues = true
-        explicitNulls = false
     }
 
     val api: RuStoreApi
@@ -68,28 +57,13 @@ object ServiceLocator {
         }
     }
 
-    private fun buildApi(): RuStoreApi {
-        val client = OkHttpClient.Builder()
-            .connectTimeout(20, TimeUnit.SECONDS)
-            .readTimeout(30, TimeUnit.SECONDS)
-            .addInterceptor { chain ->
-                val req = chain.request().newBuilder()
-                    .addHeader("User-Agent", "RuStoreUpdater/1.0 (Android)")
-                    .addHeader("Accept", "application/json")
-                    .build()
-                chain.proceed(req)
-            }
-            .addInterceptor(HttpLoggingInterceptor().apply {
-                level = HttpLoggingInterceptor.Level.BASIC
-            })
-            .build()
-
-        val contentType = "application/json".toMediaType()
-        return Retrofit.Builder()
-            .baseUrl(RuStoreApi.BASE_URL)
-            .client(client)
-            .addConverterFactory(json.asConverterFactory(contentType))
-            .build()
-            .create(RuStoreApi::class.java)
-    }
+    /**
+     * Builds the RuStore API client with the device fingerprint that backapi expects.
+     *
+     * Without the [RuStoreDevice] headers (`ruStoreVerCode` in particular) the
+     * `overallInfo` and `download-link` endpoints answer HTTP 400 with an empty
+     * body, which used to make adding any app fail.
+     */
+    private fun buildApi(): RuStoreApi =
+        RuStoreApiFactory.create(RuStoreDevice.fromContext(appContext))
 }

@@ -3,7 +3,12 @@ package ru.app.rustoreupdater.work
 import android.content.Context
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.WorkInfo
 import androidx.work.WorkManager
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withContext
+import ru.app.rustoreupdater.di.ServiceLocator
 import java.util.concurrent.TimeUnit
 
 /**
@@ -12,7 +17,7 @@ import java.util.concurrent.TimeUnit
  */
 object UpdateScheduler {
 
-    private const val DEFAULT_INTERVAL_HOURS = 6L
+    private const val DEFAULT_INTERVAL_HOURS = 6
 
     /** Ensure a periodic check is registered with the given interval (hours). */
     fun schedule(context: Context, intervalHours: Int) {
@@ -27,22 +32,26 @@ object UpdateScheduler {
         )
     }
 
-    /** Convenience used at app start: schedules with the stored or default interval. */
-    fun ensureScheduled(context: Context) {
-        schedule(context, DEFAULT_INTERVAL_HOURS.toInt())
-    }
-
-    /** Run an immediate one-off check (used by the "Check now" button). */
-    fun runNow(context: Context) {
-        val request = PeriodicWorkRequestBuilder<UpdateCheckWorker>(1, TimeUnit.DAYS).build()
-        // Re-schedule immediately by replacing the existing periodic work with a 0 initial delay.
-        WorkManager.getInstance(context).enqueueUniquePeriodicWork(
-            UpdateCheckWorker.UNIQUE_NAME,
-            ExistingPeriodicWorkPolicy.UPDATE,
-            PeriodicWorkRequestBuilder<UpdateCheckWorker>(DEFAULT_INTERVAL_HOURS, TimeUnit.HOURS)
-                .setInitialDelay(0, TimeUnit.SECONDS)
-                .build(),
-        )
+    /**
+     * Called at app start: registers the periodic check **only when none is active**,
+     * using the interval the user picked in Settings.
+     *
+     * Re-enqueueing unconditionally with a hardcoded interval (the previous
+     * behaviour) silently reset the user's choice back to 6 hours on every launch.
+     */
+    suspend fun ensureScheduled(context: Context) {
+        val ctx = context.applicationContext
+        val infos: List<WorkInfo> = withContext(Dispatchers.IO) {
+            runCatching {
+                WorkManager.getInstance(ctx)
+                    .getWorkInfosForUniqueWork(UpdateCheckWorker.UNIQUE_NAME)
+                    .get()
+            }.getOrDefault(emptyList())
+        }
+        if (infos.any { !it.state.isFinished }) return
+        val hours = runCatching { ServiceLocator.settingsStore.intervalHours.first() }
+            .getOrDefault(DEFAULT_INTERVAL_HOURS)
+        schedule(ctx, hours)
     }
 
     fun cancel(context: Context) {

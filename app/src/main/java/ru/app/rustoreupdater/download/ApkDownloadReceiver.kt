@@ -5,24 +5,22 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.util.Log
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.launch
-import ru.app.rustoreupdater.Notifier
-import ru.app.rustoreupdater.data.repo.AppRepository
-import ru.app.rustoreupdater.di.ServiceLocator
-import ru.app.rustoreupdater.selfupdate.SelfUpdater
+import androidx.work.ExistingWorkPolicy
+import androidx.work.OutOfQuotaPolicy
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.WorkManager
+import androidx.work.workDataOf
 
 /**
  * Listens for [DownloadManager.ACTION_DOWNLOAD_COMPLETE] for APK downloads that we
- * enqueued via [ApkDownloader]. On success it posts a "ready to install"
- * notification wired to launch the system installer.
+ * enqueued via [ApkDownloader] and hands the id over to [ApkPrepareWorker], which
+ * unpacks RuStore's `.zip` artifact when needed (see [ApkArchive]) and posts the
+ * "ready to install" notification.
+ *
+ * Nothing heavy is done here: a receiver only gets a short grace period, and
+ * unpacking a 170+ MB universal APK does not fit into it.
  */
 class ApkDownloadReceiver : BroadcastReceiver() {
-
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     override fun onReceive(context: Context, intent: Intent) {
         Log.d(TAG, "onReceive: action=${intent.action}")
@@ -31,36 +29,37 @@ class ApkDownloadReceiver : BroadcastReceiver() {
         Log.d(TAG, "DOWNLOAD_COMPLETE id=$downloadId")
         if (downloadId <= 0) return
 
+        // The in-memory map only exists while this process has been alive since the
+        // download was enqueued; fall back to the persisted registry, otherwise a
+        // download that finished after a process restart would be ignored.
+        // Read (do not take) the registry entry: the worker clears it once it has
+        // actually handled the file, so a job that never runs cannot lose it.
         val appId = ActiveDownloads.appIdFor(downloadId)
+            ?: DownloadRegistry.get(context, downloadId)
         Log.d(TAG, "mapped appId=$appId for downloadId=$downloadId")
         if (appId == null) {
             // Not our download; ignore.
             return
         }
-        val repo: AppRepository = ServiceLocator.appRepository(context)
 
-        scope.launch {
-            val file = ApkDownloader.fileForDownloadId(context, downloadId)
-            ActiveDownloads.remove(downloadId)
-
-            // Self-update download: route through the dedicated notification.
-            if (appId == SelfUpdater.SELF_UPDATE_APP_ID) {
-                Log.d(TAG, "self-update APK downloaded: ${file?.absolutePath}")
-                if (file != null && file.exists()) {
-                    Notifier.notifySelfUpdateReady(context, file)
-                }
-                return@launch
-            }
-
-            val app = repo.observeApp(appId).first()
-            Log.d(TAG, "file=${file?.absolutePath} exists=${file?.exists()} app=$app")
-            if (file != null && file.exists() && app != null) {
-                // Move the app from "downloading" to "installing" state until the system
-                // confirms the package is installed (handled by PackageStateReceiver).
-                ActiveDownloads.markInstalling(app.appId, app.packageName)
-                Notifier.notifyDownloadComplete(context, app, file)
-            }
-        }
+        val request = OneTimeWorkRequestBuilder<ApkPrepareWorker>()
+            // Run right away: the user has just finished a download and expects the
+            // "ready to install" notification, not a job deferred until Doze ends.
+            .setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
+            .setInputData(
+                workDataOf(
+                    ApkPrepareWorker.KEY_DOWNLOAD_ID to downloadId,
+                    ApkPrepareWorker.KEY_APP_ID to appId,
+                )
+            )
+            .build()
+        // KEEP: a duplicated DOWNLOAD_COMPLETE broadcast must not start a second
+        // extraction over the same file.
+        WorkManager.getInstance(context.applicationContext).enqueueUniqueWork(
+            ApkPrepareWorker.workName(downloadId),
+            ExistingWorkPolicy.KEEP,
+            request,
+        )
     }
 
     companion object {

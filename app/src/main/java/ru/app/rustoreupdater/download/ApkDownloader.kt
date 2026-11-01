@@ -37,10 +37,14 @@ class ApkDownloader(private val context: Context, private val repository: AppRep
         }
         return try {
             val url = repository.fetchDownloadLink(appId)
-            Log.d(TAG, "Resolved APK url for $appId: $url")
+            Log.d(TAG, "Resolved download url for $appId: $url")
             val tracked = repository.observeApp(appId).first()
             val safeName = (tracked?.packageName ?: appId).replace(Regex("[^A-Za-z0-9._-]"), "_")
-            val target = apkFile(context, "$safeName.apk")
+            // RuStore hands out a `.zip` holding UNIVERSAL_APK_*.apk; GitHub
+            // self-updates hand out a bare `.apk`. Name the file accordingly — the
+            // receiver unpacks the archive, see [ApkArchive].
+            val extension = if (isArchiveUrl(url)) "zip" else "apk"
+            val target = apkFile(context, "$safeName.$extension")
             // Clean up any previous copy to avoid collisions.
             target.delete()
             target.parentFile?.mkdirs()
@@ -57,6 +61,9 @@ class ApkDownloader(private val context: Context, private val repository: AppRep
             val id = downloadManager.enqueue(request)
             Log.d(TAG, "Enqueued download id=$id -> ${target.absolutePath}")
             ActiveDownloads.put(appId, id)
+            // Persisted: DownloadManager outlives this process, and the completion
+            // broadcast may arrive after we have been killed and restarted.
+            DownloadRegistry.put(context, id, appId)
             id
         } catch (e: Exception) {
             Log.e(TAG, "download failed for $appId", e)
@@ -77,6 +84,10 @@ class ApkDownloader(private val context: Context, private val repository: AppRep
 
         fun apkFile(context: Context, name: String): File = File(downloadsDir(context), name)
 
+        /** RuStore download links point at `.zip` bundles, GitHub self-update ones at `.apk`. */
+        fun isArchiveUrl(url: String): Boolean =
+            url.substringBefore('?').substringBefore('#').endsWith(".zip", ignoreCase = true)
+
         /** Resolve the on-disk file produced by a finished download id. */
         fun fileForDownloadId(context: Context, downloadId: Long): File? {
             val dm = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
@@ -89,6 +100,38 @@ class ApkDownloader(private val context: Context, private val repository: AppRep
                     ?: return null
                 return File(Uri.parse(localUri).path ?: return null)
             }
+        }
+
+        /**
+         * Why a download that did not finish successfully failed, as a short
+         * user-facing Russian phrase; `null` when the download actually succeeded
+         * (or the id is unknown, which DownloadManager cannot tell apart here).
+         */
+        fun failureReason(context: Context, downloadId: Long): String? {
+            val dm = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+            val cursor = dm.query(DownloadManager.Query().setFilterById(downloadId)) ?: return null
+            cursor.use {
+                if (!it.moveToFirst()) return null
+                val status = it.getInt(it.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS))
+                if (status == DownloadManager.STATUS_SUCCESSFUL) return null
+                val reason = it.getInt(it.getColumnIndexOrThrow(DownloadManager.COLUMN_REASON))
+                return describeFailure(reason)
+            }
+        }
+
+        /** Maps a [DownloadManager] `COLUMN_REASON` code to an explanation. */
+        internal fun describeFailure(reason: Int): String = when (reason) {
+            DownloadManager.ERROR_INSUFFICIENT_SPACE -> "недостаточно места на устройстве"
+            DownloadManager.ERROR_DEVICE_NOT_FOUND -> "карта памяти недоступна"
+            DownloadManager.ERROR_FILE_ALREADY_EXISTS -> "файл уже существует"
+            DownloadManager.ERROR_FILE_ERROR -> "ошибка записи файла"
+            DownloadManager.ERROR_HTTP_DATA_ERROR -> "обрыв соединения при загрузке"
+            DownloadManager.ERROR_TOO_MANY_REDIRECTS -> "слишком много перенаправлений"
+            DownloadManager.ERROR_UNHANDLED_HTTP_CODE ->
+                "сервер RuStore отклонил запрос (возможно, ссылка устарела)"
+            DownloadManager.ERROR_CANNOT_RESUME -> "не удалось возобновить загрузку"
+            DownloadManager.ERROR_UNKNOWN -> "неизвестная ошибка"
+            else -> "код ошибки $reason"
         }
     }
 }

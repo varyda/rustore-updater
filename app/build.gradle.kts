@@ -80,6 +80,14 @@ android {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
     }
+
+    testOptions {
+        unitTests {
+            // The RuStore network layer logs through android.util.Log; returning
+            // defaults keeps the JVM tests runnable without Robolectric.
+            isReturnDefaultValues = true
+        }
+    }
 }
 
 dependencies {
@@ -113,6 +121,10 @@ dependencies {
 
     // Image loading
     implementation(libs.coil.compose)
+
+    // Unit tests
+    testImplementation(libs.junit)
+    testImplementation(libs.kotlinx.coroutines.core)
 
     // Immutable collections — gives Compose a stable List type so feed sections are skippable.
     implementation(libs.kotlinx.collections.immutable)

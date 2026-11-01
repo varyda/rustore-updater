@@ -8,6 +8,7 @@ import ru.app.rustoreupdater.data.db.TrackedAppEntity
 import ru.app.rustoreupdater.data.network.DownloadLinkRequest
 import ru.app.rustoreupdater.data.network.OverallInfoBodyDto
 import ru.app.rustoreupdater.data.network.RuStoreApi
+import ru.app.rustoreupdater.data.network.RuStoreDevice
 import ru.app.rustoreupdater.data.network.SearchResultBodyDto
 
 /**
@@ -23,6 +24,7 @@ class AppRepository(
     private val context: Context,
     private val api: RuStoreApi,
     private val dao: AppDao,
+    private val device: RuStoreDevice = RuStoreDevice.fromContext(context),
 ) {
 
     val trackedApps = dao.observeAll()
@@ -42,14 +44,29 @@ class AppRepository(
         return res.body ?: error("Empty info body for $packageName")
     }
 
-    /** download-link is keyed by numeric appId. */
+    /**
+     * download-link is keyed by numeric appId. The request body must describe the
+     * real device (sdk, screen density, ABIs), otherwise RuStore may hand out an
+     * APK that the device cannot install.
+     *
+     * The returned URL points at a **`.zip` archive** that holds
+     * `UNIVERSAL_APK_<uuid>.apk` (plus baseline profiles), not at an APK: the caller
+     * has to unpack it — see [ru.app.rustoreupdater.download.ApkArchive].
+     */
     suspend fun fetchDownloadLink(appId: String): String {
-        val res = api.getDownloadLink(DownloadLinkRequest(appId = appId))
+        val res = api.getDownloadLink(
+            DownloadLinkRequest(
+                appId = appId,
+                supportedAbis = device.abis,
+                screenDensity = device.screenDensity,
+                supportedLocales = device.locales,
+                sdkVersion = device.sdkInt,
+            )
+        )
         if (res.code != "OK") error("Download link failed: ${res.code}")
         val url = res.body?.downloadUrls?.firstOrNull()?.url
             ?: error("No download URL for $appId")
-        // RuStore sometimes returns .zip suffix that is actually an .apk
-        return url.replace(Regex("\\.zip$"), ".apk")
+        return portableDownloadUrl(url)
     }
 
     /** Detect the version code of an installed package, or null if not installed. */
@@ -170,6 +187,24 @@ class AppRepository(
     }
 
     companion object {
+        /**
+         * RuStore serves APK archives from two mirrors: `static-m.rustore.ru` and
+         * `static.rustore.ru`. The `-m` host is fronted by the "Russian Trusted Sub CA"
+         * (Минцифры), which stock Android does not trust, so DownloadManager fails with
+         * an SSL error before a single byte is written. The public host serves
+         * byte-identical objects (same ETag/size) under a HARICA certificate that every
+         * device trusts, so we always download from there.
+         */
+        private const val TRUSTED_STATIC_HOST = "https://static.rustore.ru/"
+        private const val UNTRUSTED_STATIC_HOST = "https://static-m.rustore.ru/"
+
+        fun portableDownloadUrl(url: String): String =
+            if (url.startsWith(UNTRUSTED_STATIC_HOST)) {
+                TRUSTED_STATIC_HOST + url.removePrefix(UNTRUSTED_STATIC_HOST)
+            } else {
+                url
+            }
+
         fun fromContext(context: Context, api: RuStoreApi): AppRepository =
             AppRepository(context, api, AppDatabase.get(context).appDao())
     }

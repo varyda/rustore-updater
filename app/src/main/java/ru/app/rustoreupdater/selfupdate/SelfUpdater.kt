@@ -16,6 +16,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import ru.app.rustoreupdater.di.ServiceLocator
 import ru.app.rustoreupdater.download.ActiveDownloads
+import ru.app.rustoreupdater.download.DownloadRegistry
 import java.io.File
 import java.util.concurrent.TimeUnit
 
@@ -35,7 +36,7 @@ import java.util.concurrent.TimeUnit
  */
 class SelfUpdater(private val context: Context) {
 
-    /** Sentinel appId used to distinguish self-update downloads from app downloads. */
+    /** Destination of the downloaded release APK inside the app's downloads dir. */
     val apkFile: File
         get() = File(downloadsDir(), "rustore-updater-self.apk")
 
@@ -115,6 +116,7 @@ class SelfUpdater(private val context: Context) {
             }
             val id = downloadManager.enqueue(request)
             ActiveDownloads.put(SELF_UPDATE_APP_ID, id)
+            DownloadRegistry.put(context, id, SELF_UPDATE_APP_ID)
             _state.value = SelfUpdateState.Downloading(info)
             Log.d(TAG, "enqueued self-update download id=$id -> ${apkFile.absolutePath}")
             id
