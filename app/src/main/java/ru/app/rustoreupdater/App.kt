@@ -1,16 +1,23 @@
 package ru.app.rustoreupdater
 
 import android.app.Application
+import android.util.Log
+import coil.EventListener
 import coil.ImageLoader
 import coil.ImageLoaderFactory
 import coil.disk.DiskCache
 import coil.memory.MemoryCache
+import coil.request.ErrorResult
+import coil.request.ImageRequest
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import okhttp3.Dispatcher
+import okhttp3.OkHttpClient
 import ru.app.rustoreupdater.di.ServiceLocator
 import ru.app.rustoreupdater.work.UpdateScheduler
+import java.util.concurrent.TimeUnit
 
 class App : Application(), ImageLoaderFactory {
 
@@ -26,22 +33,54 @@ class App : Application(), ImageLoaderFactory {
     }
 
     /**
-     * Shared Coil [ImageLoader] with explicit caches. Critical for list scrolling: without a
-     * stable disk cache, fast scroll re-triggers network/disk work for icons that were already
-     * shown, causing jank on the main thread.
+     * Shared Coil [ImageLoader] with explicit caches and a tuned OkHttp client.
+     *
+     * Key points for `static.rustore.ru`:
+     * - `maxRequestsPerHost = 12` prevents icon prefetch bursts from queuing behind OkHttp's
+     *   default 5-per-host limit and timing out.
+     * - `respectCacheHeaders(false)` ensures icons/screenshots are cached on disk even when the
+     *   CDN omits cache headers or sends `content-disposition: attachment`.
+     * - Explicit `User-Agent` and `Accept` headers avoid CDN rejections.
      */
-    override fun newImageLoader(): ImageLoader = ImageLoader.Builder(this)
-        .memoryCache {
-            MemoryCache.Builder(this)
-                .maxSizePercent(0.20)
-                .build()
+    override fun newImageLoader(): ImageLoader {
+        val imageDispatcher = Dispatcher().apply {
+            maxRequests = 32
+            maxRequestsPerHost = 12
         }
-        .diskCache {
-            DiskCache.Builder()
-                .directory(cacheDir.resolve("image_cache"))
-                .maxSizeBytes(64L * 1024 * 1024) // 64 MB
-                .build()
-        }
-        .crossfade(false)
-        .build()
+        val imageClient = OkHttpClient.Builder()
+            .dispatcher(imageDispatcher)
+            .connectTimeout(15, TimeUnit.SECONDS)
+            .readTimeout(25, TimeUnit.SECONDS)
+            .retryOnConnectionFailure(true)
+            .addInterceptor { chain ->
+                val req = chain.request().newBuilder()
+                    .header("User-Agent", "RuStoreUpdater/1.2 (Android)")
+                    .header("Accept", "image/webp,image/png,image/jpeg,image/*;q=0.8,*/*;q=0.5")
+                    .build()
+                chain.proceed(req)
+            }
+            .build()
+
+        return ImageLoader.Builder(this)
+            .okHttpClient(imageClient)
+            .respectCacheHeaders(false)
+            .memoryCache {
+                MemoryCache.Builder(this)
+                    .maxSizePercent(0.25)
+                    .build()
+            }
+            .diskCache {
+                DiskCache.Builder()
+                    .directory(cacheDir.resolve("image_cache"))
+                    .maxSizeBytes(128L * 1024 * 1024) // 128 MB
+                    .build()
+            }
+            .eventListener(object : EventListener {
+                override fun onError(request: ImageRequest, result: ErrorResult) {
+                    Log.w("CoilImage", "Failed to load ${request.data}", result.throwable)
+                }
+            })
+            .crossfade(false)
+            .build()
+    }
 }

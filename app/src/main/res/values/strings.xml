@@ -49,6 +49,7 @@
     <string name="detail_size">Размер</string>
     <string name="detail_updated">Обновлено</string>
     <string name="detail_category">Категория</string>
+    <string name="detail_screenshots">Скриншоты</string>
     <string name="detail_description">Описание</string>
     <string name="detail_whats_new">Что нового</string>
     <string name="detail_btn_download_apk">Скачать APK</string>

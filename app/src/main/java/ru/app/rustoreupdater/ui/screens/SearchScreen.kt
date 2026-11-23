@@ -34,18 +34,14 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import coil.compose.AsyncImage
-import coil.request.ImageRequest
 import ru.app.rustoreupdater.R
 import ru.app.rustoreupdater.data.network.SearchItemDto
+import ru.app.rustoreupdater.ui.components.AppIcon
 import ru.app.rustoreupdater.ui.components.EmptyState
 import ru.app.rustoreupdater.ui.components.ErrorState
 import ru.app.rustoreupdater.ui.components.LoadingState
@@ -118,18 +114,16 @@ private fun SearchRow(
     onTrack: () -> Unit,
     onClick: () -> Unit,
 ) {
-    val context = LocalContext.current
     Card(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
     ) {
         Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            AsyncImage(
-                model = ImageRequest.Builder(context).data(item.iconUrl).crossfade(true).build(),
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.size(56.dp).clip(RoundedCornerShape(12.dp)),
+            ru.app.rustoreupdater.ui.components.AppIcon(
+                url = item.iconUrl,
+                modifier = Modifier.size(56.dp),
+                cornerRadius = 12.dp,
             )
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {

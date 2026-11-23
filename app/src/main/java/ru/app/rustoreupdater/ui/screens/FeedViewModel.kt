@@ -158,8 +158,14 @@ class FeedViewModel(app: Application) : BaseVm(app) {
         val loader: ImageLoader = coil.Coil.imageLoader(getApplication())
         val ctx = getApplication<Application>()
         urls.forEach { url ->
-            val req = ImageRequest.Builder(ctx).data(url).size(128).build()
-            loader.enqueue(req)
+            val cleanUrl = url.trim()
+            if (cleanUrl.isNotEmpty()) {
+                val req = ImageRequest.Builder(ctx)
+                    .data(cleanUrl)
+                    .size(ru.app.rustoreupdater.ui.components.ICON_DECODE_SIZE_PX)
+                    .build()
+                loader.enqueue(req)
+            }
         }
     }
 

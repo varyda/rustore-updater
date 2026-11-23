@@ -1,6 +1,9 @@
 package ru.app.rustoreupdater.ui.screens
 
 import android.content.Intent
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -11,11 +14,16 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.BrokenImage
+import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.OpenInBrowser
 import androidx.compose.material3.AssistChip
@@ -36,15 +44,24 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.viewmodel.compose.viewModel
+import coil.compose.AsyncImage
+import coil.compose.AsyncImagePainter
+import coil.request.ImageRequest
 import ru.app.rustoreupdater.R
 import ru.app.rustoreupdater.ui.components.AppIcon
 import ru.app.rustoreupdater.ui.components.ErrorState
@@ -270,6 +287,30 @@ private fun DetailContent(
         InfoRow(stringResource(R.string.detail_category), info.category ?: "—")
         info.appVerUpdatedAt?.let { InfoRow(stringResource(R.string.detail_updated), it.take(10)) }
 
+        if (info.screenshots.isNotEmpty()) {
+            var fullscreenUrl by remember { mutableStateOf<String?>(null) }
+            Spacer(Modifier.height(16.dp))
+            Text(stringResource(R.string.detail_screenshots), style = MaterialTheme.typography.titleMedium)
+            Spacer(Modifier.height(8.dp))
+            LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                itemsIndexed(info.screenshots, key = { idx, url -> "$idx:$url" }) { _, url ->
+                    ScreenshotThumbnail(
+                        url = url,
+                        onClick = { fullscreenUrl = url },
+                    )
+                }
+            }
+            fullscreenUrl?.let { url ->
+                FullscreenScreenshotDialog(
+                    url = url,
+                    onDismiss = { fullscreenUrl = null },
+                )
+            }
+        }
+
         info.whatsNew?.takeIf { it.isNotBlank() }?.let {
             Spacer(Modifier.height(16.dp))
             Text(stringResource(R.string.detail_whats_new), style = MaterialTheme.typography.titleMedium)
@@ -284,6 +325,92 @@ private fun DetailContent(
             Text(it, style = MaterialTheme.typography.bodyMedium)
         }
         Spacer(Modifier.height(32.dp))
+    }
+}
+
+@Composable
+private fun ScreenshotThumbnail(
+    url: String,
+    onClick: () -> Unit,
+) {
+    val context = LocalContext.current
+    var state by remember(url) { mutableStateOf<AsyncImagePainter.State>(AsyncImagePainter.State.Empty) }
+    Box(
+        modifier = Modifier
+            .height(220.dp)
+            .width(128.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(MaterialTheme.colorScheme.surfaceContainerHighest)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        AsyncImage(
+            model = ImageRequest.Builder(context)
+                .data(url)
+                .crossfade(true)
+                .build(),
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            onState = { state = it },
+            modifier = Modifier.fillMaxSize(),
+        )
+        when (state) {
+            is AsyncImagePainter.State.Loading -> CircularProgressIndicator(
+                modifier = Modifier.size(24.dp),
+                strokeWidth = 2.dp,
+            )
+            is AsyncImagePainter.State.Error -> Icon(
+                imageVector = Icons.Outlined.BrokenImage,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                modifier = Modifier.size(32.dp),
+            )
+            else -> Unit
+        }
+    }
+}
+
+@Composable
+private fun FullscreenScreenshotDialog(
+    url: String,
+    onDismiss: () -> Unit,
+) {
+    val context = LocalContext.current
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.92f))
+                .clickable(onClick = onDismiss),
+            contentAlignment = Alignment.Center,
+        ) {
+            AsyncImage(
+                model = ImageRequest.Builder(context)
+                    .data(url)
+                    .crossfade(true)
+                    .build(),
+                contentDescription = null,
+                contentScale = ContentScale.Fit,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(16.dp),
+            )
+            IconButton(
+                onClick = onDismiss,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(16.dp),
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.Close,
+                    contentDescription = null,
+                    tint = Color.White,
+                )
+            }
+        }
     }
 }
 

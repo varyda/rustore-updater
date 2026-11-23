@@ -58,6 +58,9 @@ class DetailViewModel(app: Application, private val handle: SavedStateHandle) : 
                     appVerUpdatedAt = data.appVerUpdatedAt,
                     whatsNew = data.whatsNew,
                     fullDescription = data.fullDescription,
+                    screenshots = data.fileUrls
+                        .sortedBy { it.ordinal }
+                        .mapNotNull { it.fileUrl?.trim()?.takeIf { url -> url.isNotEmpty() } },
                 )
             } catch (e: Exception) {
                 _error.value = e.message ?: "Ошибка загрузки"
@@ -118,4 +121,5 @@ data class DetailInfo(
     val appVerUpdatedAt: String?,
     val whatsNew: String?,
     val fullDescription: String?,
+    val screenshots: List<String> = emptyList(),
 )
