@@ -98,7 +98,7 @@ class AppRepository(
                 appId = appId,
                 packageName = info.packageName ?: packageName,
                 appName = info.appName ?: packageName,
-                iconUrl = info.iconUrl,
+                iconUrl = info.iconUrl?.let(::portableDownloadUrl),
                 developerName = info.companyName,
                 category = info.category,
                 shortDescription = info.shortDescription,

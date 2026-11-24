@@ -131,4 +131,31 @@ class RuStoreApiTest {
             AppRepository.portableDownloadUrl("https://example.com/x.zip"),
         )
     }
+
+    /** Icons and screenshots from search/overallInfo must load via the trusted mirror. */
+    @Test
+    fun mediaUrlsAreReachableOnTrustedMirror() = runBlocking {
+        val search = api.search(query = "сбербанк", pageNumber = 0, pageSize = 3)
+        val item = search.body!!.content.first()
+        val iconUrl = AppRepository.portableDownloadUrl(item.iconUrl!!)
+        assertTrue("icon must use trusted mirror: $iconUrl", iconUrl.startsWith("https://static.rustore.ru/"))
+
+        client.newCall(Request.Builder().url(iconUrl).head().build()).execute().use { resp ->
+            assertTrue("icon HEAD failed with HTTP ${resp.code}", resp.code in 200..299)
+            val contentType = resp.header("Content-Type").orEmpty()
+            assertTrue("unexpected icon content-type: $contentType", contentType.startsWith("image/"))
+        }
+
+        val info = api.getOverallInfo(item.packageName!!)
+        val firstShot = info.body!!.fileUrls.firstOrNull()?.fileUrl
+        assertNotNull("expected at least one screenshot", firstShot)
+        val shotUrl = AppRepository.portableDownloadUrl(firstShot!!)
+        assertTrue("screenshot must use trusted mirror: $shotUrl", shotUrl.startsWith("https://static.rustore.ru/"))
+
+        client.newCall(Request.Builder().url(shotUrl).head().build()).execute().use { resp ->
+            assertTrue("screenshot HEAD failed with HTTP ${resp.code}", resp.code in 200..299)
+            val contentType = resp.header("Content-Type").orEmpty()
+            assertTrue("unexpected screenshot content-type: $contentType", contentType.startsWith("image/"))
+        }
+    }
 }

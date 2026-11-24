@@ -35,12 +35,15 @@ class App : Application(), ImageLoaderFactory {
     /**
      * Shared Coil [ImageLoader] with explicit caches and a tuned OkHttp client.
      *
-     * Key points for `static.rustore.ru`:
+     * Key points for RuStore media:
+     * - RuStore's mobile API returns `static-m.rustore.ru` for icons and screenshots, which uses
+     *   the Ministry's "Russian Trusted Sub CA" certificate untrusted by stock Android — causing
+     *   SSLHandshakeException on every image. Rewriting the host to `static.rustore.ru` serves the
+     *   exact same assets under a publicly trusted HARICA certificate.
      * - `maxRequestsPerHost = 12` prevents icon prefetch bursts from queuing behind OkHttp's
      *   default 5-per-host limit and timing out.
      * - `respectCacheHeaders(false)` ensures icons/screenshots are cached on disk even when the
      *   CDN omits cache headers or sends `content-disposition: attachment`.
-     * - Explicit `User-Agent` and `Accept` headers avoid CDN rejections.
      */
     override fun newImageLoader(): ImageLoader {
         val imageDispatcher = Dispatcher().apply {
@@ -53,7 +56,14 @@ class App : Application(), ImageLoaderFactory {
             .readTimeout(25, TimeUnit.SECONDS)
             .retryOnConnectionFailure(true)
             .addInterceptor { chain ->
-                val req = chain.request().newBuilder()
+                val original = chain.request()
+                val targetUrl = if (original.url.host.equals("static-m.rustore.ru", ignoreCase = true)) {
+                    original.url.newBuilder().host("static.rustore.ru").build()
+                } else {
+                    original.url
+                }
+                val req = original.newBuilder()
+                    .url(targetUrl)
                     .header("User-Agent", "RuStoreUpdater/1.2 (Android)")
                     .header("Accept", "image/webp,image/png,image/jpeg,image/*;q=0.8,*/*;q=0.5")
                     .build()
